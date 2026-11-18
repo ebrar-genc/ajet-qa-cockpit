@@ -1,0 +1,19 @@
+# Secrets & certs — never commit
+.env
+certs/
+
+# Cloned automation repo (lives in its own Bitbucket remote)
+automation/
+
+# Generated output
+reports/
+test-results/
+.cache/
+
+# Tooling
+node_modules/
+*.log
+.DS_Store
+
+# Agent plugin repo (own Bitbucket remote)
+plugin/
