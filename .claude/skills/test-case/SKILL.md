@@ -1,6 +1,6 @@
 ---
 name: test-case
-description: Create or update Xray Test issues in AJETPSSD — functional (manual) test cases by default, with correct metadata, story links and test set/execution bookkeeping. Use when the user wants to write scenarios for a story, add a new test case, update an existing one, work through the Update Pending queue, or fix test case metadata.
+description: Create or update Xray Test issues in AJETPSSD - functional (manual) test cases by default, with correct metadata, story links and test set/execution bookkeeping. Use when the user wants to write scenarios for a story, add a new test case, update an existing one, work through the Update Pending queue, or fix test case metadata.
 ---
 
 # Test case yazma ve güncelleme
@@ -19,9 +19,9 @@ Kullanıcı açıkça Gherkin isterse `bdd-author` skill'ine geç.
 
 ## Önce oku
 
-- `docs/test-writing-rules.md` — yazım standardı, alan değerleri, checklist
-- `docs/conventions.md` — modül adları, kısaltmalar, koşum notu kalıbı
-- `docs/jira-map.md` — alan id'leri ve statüler
+- `docs/test-writing-rules.md` - yazım standardı, alan değerleri, checklist
+- `docs/conventions.md` - modül adları, kısaltmalar, koşum notu kalıbı
+- `docs/jira-map.md` - alan id'leri ve statüler
 
 ## Kaç senaryo yazılır
 
@@ -68,7 +68,7 @@ node scripts/jira.mjs create --project AJETPSSD --type Test \
 |---|---|
 | `--field.testType` | `Manual` (varsayılan) \| `Cucumber` \| `Generic` |
 | `--field.testRunType` | `Manuel` \| `Otomasyon` |
-| `--field.assignee` | `932357` — her zaman Ebrar. Başka değer verme |
+| `--field.assignee` | `932357` - her zaman Ebrar. Başka değer verme |
 | `--field.channel` | `WEB-Desktop` `Responsive-IOS` `Mobil-Android` `Mobil-IOS` `API-Web` `API-Mobil` |
 | `--field.testLayer` | `Component` \| `API` \| `End to End` |
 | `--field.scenarioType` | `Positive` \| `Negative` \| `Edge Case` \| `Boundary Value` |
@@ -105,7 +105,7 @@ Türkçe yaz. İlk önek senaryonun kanalıdır ve `Channel` alanıyla uyuşur.
 Eski otomasyon case'leri `<Modül> | <Rota/Tip> | <Varyant>` kalıbını kullanır. Onları
 okurken gerekir, yeni case'de kullanma. Detay `docs/conventions.md`'de.
 
-## Story'ye bağla — zorunlu
+## Story'ye bağla - zorunlu
 
 Bir story için yazdığın her case story'ye bağlanır. Bağlanmayan case kapsam raporunda
 görünmez.
@@ -132,9 +132,44 @@ tekrar kur.
 
 ## Test Set ve Test Execution
 
-Yeni case'ler ilgili set ve execution'a eklenir. Hangisi olduğunu kullanıcı söyler —
-**tahmin etme, sor.** Set ve execution kanal kapsamlıdır: `Web - V16.1 Test Set` içine
-mobil case koyma.
+Yeni case'ler ilgili set ve execution'a eklenir. Hangisi olduğunu kullanıcı söyler.
+**Tahmin etme, sor.**
+
+Kanal ayrımı execution tipine göre değişir:
+
+- **Sprint fonksiyonel set ve execution:** Kanal ayrımı yok. WEB, AND ve IOS case'leri
+  aynı set ve execution'a girer. Örnek: `V17 Fonksiyonel Test Set`.
+- **Regresyon set ve execution:** Kanal kapsamlıdır. Örnek: `Web - V16.1 Test Set`
+  içine mobil case koyma.
+
+### Story'lere bağla - zorunlu
+
+Set ve execution, içindeki case'lerin story'lerine bağlanır. Böylece story ekranında
+senaryoların hangi sette toplandığı ve nerede koşulduğu görünür. Ekibin kullandığı
+bağlantı tipleri şunlardır:
+
+| Bağlantı | Tip | Görünüm |
+|---|---|---|
+| Execution → Story | `Tests` | Execution'da `tests <STORY>` |
+| Set → Story | `Allocated` | Sette `Allocated from <STORY>` |
+| Execution → Set | `Allocated` | Execution'da `Allocated from <SET>`, sette `Allocated to <EXEC>` |
+
+Komutlarda kaynak issue önce, hedef `--to` ile sonra gelir:
+
+```bash
+node scripts/jira.mjs link <EXEC-KEY> --to <STORY-KEY> --type Tests --dry-run
+node scripts/jira.mjs link <SET-KEY>  --to <STORY-KEY> --type Allocated --dry-run
+node scripts/jira.mjs link <EXEC-KEY> --to <SET-KEY>   --type Allocated --dry-run
+```
+
+Kurallar:
+
+- Set'e veya execution'a yeni bir story'nin case'ini eklediğinde o story'yi de bağla.
+- Yeni set ve execution açtığında ikisini birbirine `Allocated` ile bağla.
+- Bağlamadan önce `links <KEY>` ile mevcut bağlantıyı kontrol et. Aynı bağlantıyı iki kez kurma.
+- Kurduktan sonra `links <SET-KEY>` ve `links <EXEC-KEY>` ile yönü doğrula. Yön tablodaki
+  görünümle aynı olmalı. Yanlışsa `unlink <linkId>` ile sil ve tekrar kur.
+- Set ve execution'a bağlantıyı `Relates` ile kurma. `Relates` yön taşımaz.
 
 ### Açıklamayı güncelle
 
@@ -148,7 +183,7 @@ için kaç senaryo girdiğini görmelidir. Kalıp:
 Koşum sonrası aynı satırı durumla güncelle:
 
 ```
-<STORY-KEY>  <story özeti>  <N> senaryo — 7 PASS, 2 FAIL, 1 bug bekliyor
+<STORY-KEY>  <story özeti>  <N> senaryo - 7 PASS, 2 FAIL, 1 bug bekliyor
 ```
 
 Kurallar:
@@ -173,7 +208,7 @@ node scripts/jira.mjs update <KEY> --summary "..." --confirm
 node scripts/jira.mjs search "project=AJETPSSD AND issuetype=Test AND status='Update Pending'" --count-by module
 ```
 
-1. Önce **neden** güncelleme gerektiğini anla — bağlı story değişmiş mi, test mi bayatlamış?
+1. Önce **neden** güncelleme gerektiğini anla - bağlı story değişmiş mi, test mi bayatlamış?
    `node scripts/jira.mjs get <KEY>` → bağlantılara bak → ilgili story'yi oku.
 2. Değişikliği yap.
 3. Uygun statüye geçir: `BDD Review` (Gherkin değiştiyse) veya `Automated` (sadece metadata).
