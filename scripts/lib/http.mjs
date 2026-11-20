@@ -175,6 +175,13 @@ export const addTestsTo = (kind, key, testKeys) =>
     body: { add: [].concat(testKeys) },
   });
 
+/** Xray: remove Test issues from a Test Set or Test Execution (same endpoint, {remove:[keys]}). */
+export const removeTestsFrom = (kind, key, testKeys) =>
+  jira(`/rest/raven/1.0/api/${kind}/${key}/test`, {
+    method: 'POST',
+    body: { remove: [].concat(testKeys) },
+  });
+
 /** Xray: Test keys already inside a Test Set. */
 export const getSetTests = (key) => jira(`/rest/raven/1.0/api/testset/${key}/test`);
 

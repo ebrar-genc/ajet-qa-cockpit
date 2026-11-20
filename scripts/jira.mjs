@@ -8,7 +8,7 @@ import path from 'node:path';
 import {
   jira, search, getIssue, exportFeature, getSteps, getRuns, loadEnv, currentUser, ROOT, JiraError,
   getExecTests, findRun, getRun, setRunStatus, setRunComment, addRunEvidence, addIssueAttachment, downloadEvidence,
-  deleteRunEvidence, deleteIssueLink, getIssueLinks, addStep, deleteStep, addTestsTo,
+  deleteRunEvidence, deleteIssueLink, getIssueLinks, addStep, deleteStep, addTestsTo, removeTestsFrom,
 } from './lib/http.mjs';
 import { FIELDS, TEST_FIELDS, TEST_META, PROJECTS, clean, val } from './lib/fields.mjs';
 import { table, countBy, truncate, die, parseArgs } from './lib/format.mjs';
@@ -42,6 +42,11 @@ OKUMA
   links <KEY>             Issue baglantilari (id + yon)
   fields <desen>          Alan adi/id arama
 
+SET / EXECUTION ICERIGI  (--confirm sart; once --dry-run)
+  addto <SET|EXEC> --tests A,B         Test Set veya Test Execution'a test ekle
+  removefrom <SET|EXEC> --tests A,B    Test Set veya Test Execution'dan test cikar
+                          (execution'dan cikarmak o testin kosum kaydini siler)
+
 KOSUM (execution)
   exec <EXECKEY>          Execution'daki testler  [--mine] [--status TODO,FAIL]
   run <TESTKEY> --exec <EXECKEY>        Tek kosumun tam detayi (not + kanit)
@@ -63,6 +68,12 @@ YAZMA  (--confirm sart; once --dry-run)
   attach <KEY> --file <yol> [--name <ad>]              Issue'ya ek yukle
   attach <TESTKEY> --exec <EXECKEY> --file <yol>       Kosuma gorsel ekle
   note   <TESTKEY> --exec <EXECKEY> --body "<metin>|@<dosya>"    Kosum notu yaz
+
+TEMPO (worklog)
+  tempo list [--from YYYY-MM-DD] [--to YYYY-MM-DD]   Kayitlar + gunluk toplam / eksik saat
+  tempo add <KEY> --hours 2.5 --servis web|ios|android --comment "..."
+            [--date YYYY-MM-DD]   Sirket hep TKAJ. Kayit gir (--dry-run / --confirm)
+  tempo delete <tempoWorklogId>                        Kayit sil (--confirm)
 
 GENEL   --json ham cikti   |   Alan adlari: ${Object.keys(FIELDS).join(', ')}, priority, labels, components, assignee, fixVersions
 Yeni Test issue'da zorunlu: --field.testLayer --field.scenarioType --field.priority
@@ -104,8 +115,9 @@ function collectFields() {
         [...STD_FIELDS, ...Object.keys(SHAPED_FIELDS), ...Object.keys(FIELDS)].join(', ')}`);
     }
     // Option-type fields need {value}; free text stays a string. Caller can force with :raw
-    f[id] = /^(channel|module|testType|cucumberTestType|testRunType|automation|process|bugType|qaProcess|qaOrigin|severity|team|testLayer|scenarioType)$/.test(name)
-      ? { value: String(v) } : readValue(v);
+    f[id] = /^(channel|module|testType|cucumberTestType|testRunType|automation|process|bugType|qaProcess|qaOrigin|severity|team|testLayer|scenarioType|execType)$/.test(name)
+      ? { value: String(v) }
+      : name === 'releaseVersion' ? { name: String(v) } : readValue(v);
   }
   if (flags.summary) f.summary = String(flags.summary);
   if (flags.description) f.description = readValue(flags.description);
@@ -320,6 +332,98 @@ async function main() {
       }
       await addTestsTo(kind, target, keys);
       console.log(`${target}: ${keys.length} test eklendi`);
+      break;
+    }
+
+    case 'tempo': {
+      // Tempo Timesheets (Server). Read: v3 GET + core schedule. Write: v4 worklogs.
+      const sub = args[0] || die('tempo list | add | delete');
+      const SERVIS = { web: '5501', android: '5502', ios: '5503' };
+      const today = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10); // Istanbul
+      const me = await jira('/rest/api/2/myself'); // { name: '932357', key: 'JIRAUSER...' }
+
+      if (sub === 'list') {
+        const from = String(flags.from || (() => { const d = new Date(today); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d.toISOString().slice(0, 10); })());
+        const to = String(flags.to || today);
+        const logs = await jira('/rest/tempo-timesheets/3/worklogs', { query: { dateFrom: from, dateTo: to, username: me.name } });
+        const sched = await jira('/rest/tempo-core/1/user/schedule', { query: { from, to } });
+        if (JSON_OUT) return out({ logs, sched });
+        const rows = logs.map((w) => {
+          const at = Object.fromEntries((w.worklogAttributes || []).map((a) => [a.key, a.value]));
+          return { id: w.id, tarih: w.dateStarted.slice(0, 10), saat: w.timeSpentSeconds / 3600, issue: w.issue?.key, servis: at._Servis_ || '', sirket: at['_FaturalandırılacakŞirket_'] || '', yorum: truncate((w.comment || '').replace(/\s+/g, ' '), 60) };
+        }).sort((a, b) => (a.tarih < b.tarih ? -1 : 1));
+        console.log(table(rows.map((r) => ({ ...r, saat: String(r.saat) })), [['id', 'ID'], ['tarih', 'TARIH'], ['saat', 'SAAT'], ['issue', 'ISSUE'], ['servis', 'SERVIS'], ['sirket', 'SIRKET'], ['yorum', 'YORUM', 60]]));
+        console.log('\nGUNLUK:');
+        for (const d of sched.days || []) {
+          if (d.date > to) continue;
+          const got = rows.filter((r) => r.tarih === d.date).reduce((s, r) => s + r.saat, 0);
+          const need = d.requiredSeconds / 3600;
+          if (!need && !got) continue;
+          console.log(`  ${d.date}  ${got}h / ${need}h${got < need ? `   EKSIK ${need - got}h` : ''}`);
+        }
+        break;
+      }
+
+      if (sub === 'add') {
+        const key = args[1] || die('tempo add <ISSUE-KEY> gerekli');
+        const hours = Number(String(flags.hours || die('--hours gerekli')).replace(',', '.'));
+        if (!(hours > 0 && hours <= 12)) die('--hours 0-12 arasi olmali');
+        const servisIn = String(flags.servis || die('--servis gerekli: web | ios | android | backend | <kod>'));
+        // Ebrar rule (2026-11-20): only web / android / ios. Company is always TKAJ.
+        const servis = SERVIS[servisIn.toLowerCase()] || (Object.values(SERVIS).includes(servisIn) ? servisIn : null);
+        if (!servis) die(`Gecersiz servis: ${servisIn}. Yalnizca web (5501), android (5502), ios (5503).`);
+        if (flags.account && String(flags.account) !== 'TKAJ') die('Faturalandirilacak sirket her zaman TKAJ. Degistirilemez.');
+        const comment = String(flags.comment || die('--comment gerekli'));
+        if (/[—–]/.test(comment)) die('Yorumda uzun tire var. Kisa tire (-) kullan.');
+        const date = String(flags.date || today);
+        const account = 'TKAJ';
+        const issue = await getIssue(key, ['summary']);
+        const body = {
+          worker: me.key,
+          originTaskId: issue.id,
+          started: date,
+          timeSpentSeconds: Math.round(hours * 3600),
+          billableSeconds: Math.round(hours * 3600),
+          comment,
+          attributes: {
+            _Servis_: { workAttributeId: 102, value: servis },
+            '_FaturalandırılacakŞirket_': { workAttributeId: 21, value: account },
+          },
+        };
+        if (!guardWrite()) {
+          return console.log(`[DRY RUN] Tempo kaydi:\n  issue    ${key} - ${truncate(issue.fields.summary, 70)}\n  tarih    ${date}\n  sure     ${hours}h\n  servis   ${servis}\n  sirket   ${account}\n  yorum    ${comment}`);
+        }
+        const res = await jira('/rest/tempo-timesheets/4/worklogs', { method: 'POST', body });
+        const w = Array.isArray(res) ? res[0] : res;
+        console.log(`Tempo kaydi girildi: id ${w.tempoWorklogId}  ${key}  ${date}  ${hours}h  servis ${servis}  sirket ${account}`);
+        break;
+      }
+
+      if (sub === 'delete') {
+        const id = args[1] || die('tempo delete <tempoWorklogId> gerekli');
+        if (!guardWrite()) return console.log(`[DRY RUN] Tempo kaydi silinecek: ${id}`);
+        await jira(`/rest/tempo-timesheets/4/worklogs/${id}`, { method: 'DELETE', raw: true });
+        console.log(`Tempo kaydi silindi: ${id}`);
+        break;
+      }
+      die(`Bilinmeyen tempo alt komutu: ${sub}`);
+      break;
+    }
+
+    case 'removefrom': {
+      // removefrom <SET|EXEC-KEY> --tests A,B,C
+      const target = args[0] || die('Hedef KEY gerekli (Test Set veya Test Execution)');
+      const keys = String(flags.tests || die('--tests A,B,C gerekli'))
+        .split(',').map((s) => s.trim()).filter(Boolean);
+      if (!keys.length) die('En az bir test key gerekli');
+      const type = val((await getIssue(target, ['issuetype'])).fields.issuetype);
+      const kind = type === 'Test Set' ? 'testset' : type === 'Test Execution' ? 'testexec' : null;
+      if (!kind) die(`${target} bir Test Set veya Test Execution degil (${type}).`);
+      if (!guardWrite()) {
+        return console.log(`[DRY RUN] ${target} (${type}) icinden ${keys.length} test cikarilacak:\n  ${keys.join('\n  ')}`);
+      }
+      await removeTestsFrom(kind, target, keys);
+      console.log(`${target}: ${keys.length} test cikarildi`);
       break;
     }
 

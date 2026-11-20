@@ -25,6 +25,8 @@ export const FIELDS = {
   severity:          'customfield_12601', // Projede tek deger kullaniliyor: S3 - Major
   relatedExec:       'customfield_22758', // Related Test Execution
   completedPct:      'customfield_20254',
+  execType:          'customfield_22763', // Test Execution Type - ornek: Fonksiyonel
+  releaseVersion:    'customfield_22757', // Release Version (version picker) - ornek: V17
 };
 
 /** customfield_18807 -> cucumberScenario */
