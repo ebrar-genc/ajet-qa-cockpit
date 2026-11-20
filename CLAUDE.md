@@ -90,6 +90,7 @@ Waiting For BDD → BDD Review → Non Automated → Automated → Automation Re
 | `docs/step-library.md` | Kanonik Gherkin step kataloğu — **BDD yazmadan önce oku** |
 | `docs/domain.md` | Booking/payment domain sözlüğü ve öğrenilen iş kuralları |
 | `docs/conventions.md` | Test case isimlendirme ve format kuralları |
+| `docs/working-rules.md` | **Ebrar'ın kalıcı çalışma kuralları** (yazım, kanıt, bug, Tempo, story statüsü). Her oturumda geçerli |
 
 Yeni bir iş kuralı öğrendiğinde `docs/domain.md`'ye ekle. Bu repo kullandıkça akıllanır.
 
