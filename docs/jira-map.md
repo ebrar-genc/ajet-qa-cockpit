@@ -116,6 +116,22 @@ Kaynak: VS Code Copilot koşum prompt'u, saha kullanımıyla doğrulandı.
   kullan. Aksi halde Türkçe karakter bozulur. `scripts/lib/http.mjs` bunu yapar.
 - Her yazma işleminden sonra GET ile doğrula. Tek satırda raporla.
 
+## JQL tuzakları
+
+- **`labels not in (...)` etiketsiz issue'ları da eler.** `NOT IN` boş alanla eşleşmez.
+  Etiketsizleri dahil etmek için `(labels not in (...) OR labels is EMPTY)` yaz.
+  Örnek (2026-11-18): V17 story sorgusu 20 döndü, doğru sorgu 40. Ebrar'ın kendi story'si
+  AJETPSSD-48093 eksik kalan 20'nin içindeydi.
+- Aynı kural `component not in`, `fixVersion not in` ve diğer çok değerli alanlar için de geçerli.
+
+### V17 story sorgusu (düzeltilmiş)
+
+```
+fixVersion in (V17) AND project in (AJETPSSD) AND issuetype in (Story)
+AND (labels not in (notest, no-test, Erişilebilirlik) OR labels is EMPTY)
+AND status not in (Cancelled, "Ready For Release")
+```
+
 `export/test` çıktısı Test issue key'ini ve bağlı tüm requirement key'lerini tag olarak taşır:
 
 ```gherkin

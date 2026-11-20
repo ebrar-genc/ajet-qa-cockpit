@@ -118,14 +118,17 @@ gösterir (FLEX → PREMIUM). Yükseltme sonrası uçuş detayındaki paket roze
 döner. Paket aileleri **doğrulandı**: Flex ve Premium AJet'te geçerli.
 **Test edilişi:** Yükseltme öncesi ve sonrası uçuş detayı ekranını kanıt olarak al.
 
-### iOS'ta PNR işlemleri OTP aktivasyonuna bağlı, web'de değil
-**Kaynak:** AJETPSSD-49219 (2026-11-13, prep, iOS v16.1, PNR 3Z95RF ve 3Z95RM)
+### Non-login PNR işlemleri — paket yükseltme dahil — aktivasyon koduna bağlı
+**Kaynak:** AJETPSSD-49754 (2026-11-18, preprod web, PNR 3Z9G64) — ekip kararı (Ebrar, 18.11.2026).
+Önceki karar (AJETPSSD-49219, 13.11.2026: "web doğru, buton kodsuz görünmeli") **geçersiz**.
 **Kural:** Uçuşlarım'da PNR + soyad ile (misafir) sorgulanan rezervasyonda yanıt
-`isActivatedByOTP: false` döner ve `allowedActions` alanları null gelir. iOS bu durumda
-işlem butonlarını gizler; aktivasyon kodu girilince butonlar gelir. **Web aynı PNR'da
-aktivasyon kodu istemeden işlem butonunu gösterir.** Ekip kararı: doğru davranış web'inki.
-**Test edilişi:** Misafir sorgusuyla açılan PNR'da buton beklerken önce
-`isActivatedByOTP` değerine bak. Bulguyu "buton yok" diye yazma, aktivasyon durumunu belirt.
+`isActivatedByOTP: false` döner ve `allowedActions` alanları null gelir. Bu durumda
+**hiçbir işlem butonu görünmez — "Paketinizi yükseltin" dahil.** Aktivasyon kodu onaylanınca
+butonlar gelir. `bundleUpgradeAvailable: true` gelse bile kodsuz durumda buton gizli olmalı.
+iOS bu kurala uyuyor. Web 18.11.2026'da uymuyor: buton görünüyor ve Paket seçimi sayfası
+açılıyor → AJETPSSD-49754.
+**Test edilişi:** Misafir sorgusunda önce `isActivatedByOTP` değerine bak. `false` ise
+yükseltme butonunun **olmadığını** doğrula. Kodu girip butonun geldiğini ayrıca doğrula.
 
 ### Aktarmalı yolculukta paket tek, yükseltme tüm segmentleri kapsar
 **Kaynak:** AJETPSSD-48586 koşumu (2026-11-13, PNR 3Z95RM) + 48581/48586 beklenen sonucu
@@ -189,3 +192,27 @@ bitiş gelecek → Güncel. Aktif + ikisi de geçmiş → Geçmiş. Pasif → g�
 **Test edilişi:** Her kombinasyon için CMS'te ayrı kampanya gerekir. Sayacı üç ekranda
 birlikte oku; anasayfa farklı servisten geldiği için sapma riski oradadır. Geçmiş
 kampanyada detay sayacı test edilemez — kart açılmaz.
+**Gözlem (Android preprod, 19.11.2026):** Kampanya detay WebView'i kampanyaya göre
+`web-uat` veya `web-preprod` host'una gider. Host CMS içeriğinden gelir. Bu ağdan iki host
+da Akamai "Access Denied" döner; detay içeriği cihazdan test edilemez.
+**Anasayfa karuseli CMS'ten yönetilir.** Kampanyalar sekmesinde "Geçmiş" görünen bir
+kampanya anasayfada güncel kart olarak görünebilir. Bu bug değildir (Ebrar, 19.11.2026).
+
+### Yolcu seçimi kuralları (mobil booking)
+**Kaynak:** Android preprod koşumu (19.11.2026), AJETPSSD-5117 AC5, DIJITALTP-101647
+**Kural:** Bebek hariç en fazla 9 yolcu seçilir. Bebek sayısı refakatçi sayısını geçemez.
+Refakatçi sayılan tipler: Yetişkin, Öğretmen, Öğrenci, Engelli, Gazi. Özel tip + bebek
+geçerlidir (AC5). 0 yetişkin + 1 öğrenci + 1 bebek kabul edilir; 18+ refakatçi kontrolü
+yolcu bilgileri sayfasında yapılır. Refakatçi düşürülünce bebek refakatsiz kalıyorsa
+"−" işlemi engellenir ve uyarı çıkar.
+**Gidiş-dönüş:** Dönüş tarihi seçilmeden onaylanırsa arama "Tek yön"e döner. Bug değil.
+**Rota:** Kalkış, varışla aynı seçilirse varış temizlenir ve liste yeniden açılır.
+
+### Web v16.1 yeni sayfa adresleri ve preprod gözlemleri
+**Kaynak:** AJETPSSD-41125 etki notları + AJETPSSD-47968 koşumu (19-20.11.2026, preprod web)
+**Kural:** Yeni Tur ve Aktivite sayfası `/tr/tur-ve-aktivite`; Uçak İçi İnternet `/tr/hizmetlerimiz/ucak-ici-internet`.
+Preprod'da Hizmetler menüsü ikisinde de eski sayfaya gidiyor (CMS menü bağlantısı).
+Check-in adım adresi dil öneksizdir: `/checkin/flightselection`. `/tr/checkin/...` 404 verir.
+Preprod dil seçicide yalnız TR ve EN var; DE/FR senaryoları preprod'da koşulamaz.
+**Test edilişi:** Ağ kontrolünde `performance.getEntriesByType('resource')` kullan; Chrome ağ aracı sayfa geçişinde kaydı siler.
+Arabellek dolar: aramadan önce `performance.setResourceTimingBufferSize(5000)` çalıştır.
