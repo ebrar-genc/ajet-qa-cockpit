@@ -17,3 +17,6 @@ node_modules/
 
 # Agent plugin repo (own Bitbucket remote)
 plugin/
+
+# Android platform-tools (binary, local install)
+.tools/platform-tools/
